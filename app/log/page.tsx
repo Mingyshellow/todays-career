@@ -18,7 +18,6 @@ export default function LogPage() {
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [content, setContent] = useState('')
-  const [summary, setSummary] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTag, setCustomTag] = useState('')
   const [showCustomInput, setShowCustomInput] = useState(false)
@@ -43,17 +42,15 @@ export default function LogPage() {
         .order('log_date', { ascending: false })
       const logsData = data || []
       setLogs(logsData)
+
       const usedTags = logsData.flatMap((l: Log) => l.tags || [])
       const extra = usedTags.filter((t: string) => !DEFAULT_TAGS.includes(t))
-      if (extra.length) setAllTags([...DEFAULT_TAGS, ...new Set(extra)])
+      if (extra.length) setAllTags([...DEFAULT_TAGS, ...new Set<string>(extra)])
 
-      // 오늘 일지 있으면 기본으로 로드
       const todayLog = logsData.find((l: Log) => l.log_date === todayStr)
-      if (todayLog) {
-        loadLog(todayLog)
-      } else {
-        setActiveDate(todayStr)
-      }
+      if (todayLog) loadLog(todayLog)
+      else setActiveDate(todayStr)
+
       setLoading(false)
     }
     fetchLogs()
@@ -63,16 +60,32 @@ export default function LogPage() {
     setEditingLog(log)
     setActiveDate(log.log_date)
     setContent(log.content || '')
-    setSummary(log.summary || '')
     setSelectedTags(log.tags || [])
   }
 
-  const resetForm = () => {
-    setEditingLog(null)
-    setActiveDate(todayStr)
-    setContent('')
-    setSummary('')
-    setSelectedTags([])
+  const loadDate = (dateStr: string) => {
+    const existing = logs.find(l => l.log_date === dateStr)
+    if (existing) {
+      loadLog(existing)
+    } else {
+      setEditingLog(null)
+      setActiveDate(dateStr)
+      setContent('')
+      setSelectedTags([])
+    }
+  }
+
+  const prevDate = () => {
+    const d = new Date(activeDate)
+    d.setDate(d.getDate() - 1)
+    loadDate(d.toISOString().split('T')[0])
+  }
+
+  const nextDate = () => {
+    if (activeDate >= todayStr) return
+    const d = new Date(activeDate)
+    d.setDate(d.getDate() + 1)
+    loadDate(d.toISOString().split('T')[0])
   }
 
   const toggleTag = (tag: string) => {
@@ -98,22 +111,22 @@ export default function LogPage() {
     if (editingLog) {
       const { error } = await supabase
         .from('logs')
-        .update({ content, summary, tags: selectedTags })
+        .update({ content, tags: selectedTags })
         .eq('id', editingLog.id)
       if (!error) {
         setLogs(prev => prev.map(l =>
-          l.id === editingLog.id ? { ...l, content, summary, tags: selectedTags } : l
+          l.id === editingLog.id ? { ...l, content, tags: selectedTags } : l
         ))
-        setEditingLog(prev => prev ? { ...prev, content, summary, tags: selectedTags } : null)
+        setEditingLog(prev => prev ? { ...prev, content, tags: selectedTags } : null)
       }
     } else {
       const { data, error } = await supabase
         .from('logs')
-        .insert({ user_id: userId, log_date: todayStr, content, summary, tags: selectedTags })
+        .insert({ user_id: userId, log_date: activeDate, content, tags: selectedTags })
         .select()
         .single()
       if (!error && data) {
-        setLogs(prev => [data, ...prev])
+        setLogs(prev => [data, ...prev].sort((a, b) => b.log_date.localeCompare(a.log_date)))
         setEditingLog(data)
       }
     }
@@ -131,6 +144,7 @@ export default function LogPage() {
   }
 
   const isToday = activeDate === todayStr
+  const hasLog = !!editingLog
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
@@ -138,10 +152,18 @@ export default function LogPage() {
       <p className="text-white/40 text-sm mb-10">오늘 하루를 기록하거나 이전 기록을 수정하세요.</p>
 
       <div className="flex gap-8 items-start">
+
         {/* 왼쪽: 입력 폼 */}
         <div className="w-[420px] flex-shrink-0">
           <div className="bg-white/5 border border-white/10 rounded-xl p-6 sticky top-20">
+
+            {/* 날짜 네비게이션 */}
             <div className="flex items-center justify-between mb-5">
+              <button
+                onClick={prevDate}
+                className="w-7 h-7 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-all text-lg"
+              >‹</button>
+
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
                   {formatDate(activeDate)}
@@ -150,43 +172,51 @@ export default function LogPage() {
                 {isToday && (
                   <span className="text-xs bg-white/10 text-white/50 px-2 py-0.5 rounded-full">오늘</span>
                 )}
-                {!isToday && (
-                  <span className="text-xs bg-white/5 text-white/30 px-2 py-0.5 rounded-full">수정 중</span>
+                {!isToday && hasLog && (
+                  <span className="text-xs bg-white/5 text-white/30 px-2 py-0.5 rounded-full">수정</span>
                 )}
               </div>
-              {!isToday && (
-                <button
-                  onClick={resetForm}
-                  className="text-xs text-white/30 hover:text-white transition-colors"
-                >
-                  오늘로 돌아가기
-                </button>
-              )}
+
+              <button
+                onClick={nextDate}
+                disabled={isToday}
+                className={`w-7 h-7 flex items-center justify-center rounded-md transition-all text-lg ${
+                  isToday ? 'text-white/15 cursor-default' : 'text-white/40 hover:text-white hover:bg-white/10'
+                }`}
+              >›</button>
             </div>
+
+            {/* 오늘로 돌아가기 */}
+            {!isToday && (
+              <button
+                onClick={() => loadDate(todayStr)}
+                className="w-full text-xs text-white/30 hover:text-white/60 transition-colors mb-4 text-center"
+              >
+                오늘로 돌아가기 →
+              </button>
+            )}
 
             {/* 오늘 한 일 */}
             <div className="mb-4">
-              <label className="text-xs text-white/40 mb-2 block">오늘 한 일</label>
+              <label className="text-xs text-white/40 mb-2 block">한 일</label>
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value)}
-                placeholder="오늘 어떤 일을 했나요?"
+                placeholder={isToday ? "오늘 어떤 일을 했나요?" : `${formatDate(activeDate)}에 한 일을 기록해보세요.`}
                 rows={5}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors resize-none"
               />
             </div>
 
-            {/* 하루 요약 */}
+            {/* 하루 요약 - Gemini 예정 */}
             <div className="mb-4">
-              <label className="text-xs text-white/40 mb-2 block">하루 요약 <span className="text-white/20">(Gemini 연동 예정)</span></label>
-              <input
-                type="text"
-                value={summary}
-                onChange={e => setSummary(e.target.value)}
-                placeholder="곧 AI가 자동으로 요약해드려요"
-                disabled
-                className="w-full bg-white/3 border border-white/5 rounded-lg px-4 py-3 text-sm text-white/20 placeholder-white/15 cursor-not-allowed"
-              />
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-white/40">하루 요약</label>
+                <span className="text-xs text-white/20 bg-white/5 px-2 py-0.5 rounded-full">Gemini 연동 예정</span>
+              </div>
+              <div className="w-full bg-white/3 border border-dashed border-white/8 rounded-lg px-4 py-3 text-xs text-white/20 text-center">
+                기록을 저장하면 AI가 자동으로 요약해드려요
+              </div>
             </div>
 
             {/* 태그 */}
@@ -236,7 +266,7 @@ export default function LogPage() {
               disabled={!content.trim() || saving}
               className="w-full py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-30"
             >
-              {saving ? '저장 중...' : editingLog ? '수정 완료' : '기록 저장'}
+              {saving ? '저장 중...' : hasLog ? '수정 완료' : '기록 저장'}
             </button>
           </div>
         </div>
@@ -255,7 +285,7 @@ export default function LogPage() {
                 {logs.map(log => (
                   <div
                     key={log.id}
-                    className={`flex gap-4 relative cursor-pointer group`}
+                    className="flex gap-4 relative cursor-pointer group"
                     onClick={() => loadLog(log)}
                   >
                     <div className={`w-3.5 h-3.5 rounded-full border-2 mt-1 flex-shrink-0 z-10 transition-all ${
@@ -263,31 +293,31 @@ export default function LogPage() {
                         ? 'bg-white border-white scale-110'
                         : log.log_date === todayStr
                         ? 'bg-white border-white'
-                        : 'bg-[#0a0a0a] border-white/25 group-hover:border-white/50'
+                        : 'bg-[#0a0a0a] border-white/25 group-hover:border-white/60'
                     }`} />
-                    <div className={`flex-1 pb-2 rounded-lg transition-all ${
-                      activeDate === log.log_date ? 'opacity-100' : 'opacity-60 group-hover:opacity-90'
+                    <div className={`flex-1 pb-2 transition-all ${
+                      activeDate === log.log_date ? 'opacity-100' : 'opacity-50 group-hover:opacity-90'
                     }`}>
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs text-white/50">{formatDate(log.log_date)}</span>
-                        <span className="text-xs text-white/25">{getDayLabel(log.log_date)}</span>
+                        <span className="text-xs text-white/60">{formatDate(log.log_date)}</span>
+                        <span className="text-xs text-white/30">{getDayLabel(log.log_date)}</span>
                         {log.log_date === todayStr && (
-                          <span className="text-xs bg-white/10 text-white/40 px-1.5 py-0.5 rounded-full">오늘</span>
+                          <span className="text-xs bg-white/10 text-white/50 px-1.5 py-0.5 rounded-full">오늘</span>
                         )}
                         <span className="text-xs text-white/20 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                          클릭해서 수정 →
+                          수정하기 →
                         </span>
                       </div>
                       {log.summary && (
                         <p className="text-sm font-medium text-white mb-1.5">{log.summary}</p>
                       )}
-                      <p className="text-sm text-white/45 leading-relaxed mb-2 whitespace-pre-wrap line-clamp-3">
+                      <p className="text-sm text-white/75 leading-relaxed mb-2 whitespace-pre-wrap line-clamp-3">
                         {log.content}
                       </p>
                       {log.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {log.tags.map(tag => (
-                            <span key={tag} className="text-xs bg-white/8 text-white/35 px-2 py-0.5 rounded-full">
+                            <span key={tag} className="text-xs bg-white/8 text-white/40 px-2 py-0.5 rounded-full">
                               {tag}
                             </span>
                           ))}
