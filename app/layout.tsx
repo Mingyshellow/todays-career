@@ -23,12 +23,10 @@ export default function RootLayout({
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 24px', zIndex: 50, backgroundColor: '#0a0a0a'
         }}>
-          {/* 로고 */}
-          <Link href="/" style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '0.1em', color: 'white', textDecoration: 'none' }}>
+          <Link href="/dashboard" style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '0.1em', color: 'white', textDecoration: 'none' }}>
             오늘의 커리어
           </Link>
 
-          {/* 데스크탑 네비 */}
           <nav className="hidden md:flex" style={{ gap: '24px', alignItems: 'center' }}>
             <Link href="/dashboard" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>대시보드</Link>
             <Link href="/log" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>일지 기록</Link>
@@ -37,7 +35,6 @@ export default function RootLayout({
             <LogoutButton />
           </nav>
 
-          {/* 모바일 햄버거 */}
           <MobileNav />
         </header>
 
