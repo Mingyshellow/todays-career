@@ -8,8 +8,11 @@ const DAYS = ['월', '화', '수', '목', '금', '토', '일']
 export default function Dashboard() {
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [checking, setChecking] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
 
   const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
   const todayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1
 
   const getWeekDates = () => {
@@ -30,6 +33,7 @@ export default function Dashboard() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setUserId(user.id)
       const { data } = await supabase
         .from('logs')
         .select('log_date')
@@ -42,11 +46,24 @@ export default function Dashboard() {
 
   const loggedDates = [...new Set(logs.map(l => l.log_date))]
   const weekLogged = weekDates.filter(d => loggedDates.includes(d))
+  const isTodayChecked = loggedDates.includes(todayStr)
+
+  const handleCheckIn = async () => {
+    if (!userId || isTodayChecked) return
+    setChecking(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('logs')
+      .insert({ user_id: userId, log_date: todayStr, content: '출석체크' })
+    if (!error) {
+      setLogs(prev => [...prev, { log_date: todayStr }])
+    }
+    setChecking(false)
+  }
 
   const getStreak = () => {
     let streak = 0
     const sorted = [...loggedDates].sort().reverse()
-    const todayStr = today.toISOString().split('T')[0]
     let check = new Date(todayStr)
     for (const date of sorted) {
       if (date === check.toISOString().split('T')[0]) {
@@ -59,7 +76,20 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
-      <h1 className="text-2xl font-bold mb-2">대시보드</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold">대시보드</h1>
+        <button
+          onClick={handleCheckIn}
+          disabled={isTodayChecked || checking || loading}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            isTodayChecked
+              ? 'bg-white/10 text-white/30 cursor-default'
+              : 'bg-white text-black hover:bg-white/90 active:scale-95'
+          }`}
+        >
+          {isTodayChecked ? '✓ 오늘 출석완료' : checking ? '기록 중...' : '오늘 출석체크'}
+        </button>
+      </div>
       <p className="text-white/40 text-sm mb-10">오늘도 기록해볼까요?</p>
 
       <div className="grid grid-cols-3 gap-4 mb-10">
@@ -140,7 +170,6 @@ export default function Dashboard() {
           기록이 쌓이면 맞춤 추천이 나타나요.
         </div>
       </div>
-
     </div>
   )
 }
