@@ -66,7 +66,6 @@ export default function Auth() {
 
           <button
             onClick={handleSubmit}
-            onTouchEnd={(e) => { e.preventDefault(); handleSubmit() }}
             disabled={loading}
             className="w-full py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50"
           >
@@ -84,4 +83,3 @@ export default function Auth() {
     </div>
   )
 }
-
