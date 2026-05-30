@@ -55,6 +55,7 @@ export default function Auth() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
               className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors"
             />
           </div>
@@ -65,6 +66,7 @@ export default function Auth() {
 
           <button
             onClick={handleSubmit}
+            onTouchEnd={(e) => { e.preventDefault(); handleSubmit() }}
             disabled={loading}
             className="w-full py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50"
           >
@@ -82,3 +84,4 @@ export default function Auth() {
     </div>
   )
 }
+
