@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/utils/supabase'
 
 const DEFAULT_TAGS = ['개발', '디자인', '기획', '학습', '네트워킹', '기타']
@@ -20,14 +20,25 @@ export default function LogPage() {
   const [content, setContent] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTag, setCustomTag] = useState('')
-  const [showCustomInput, setShowCustomInput] = useState(false)
   const [allTags, setAllTags] = useState(DEFAULT_TAGS)
   const [saving, setSaving] = useState(false)
   const [editingLog, setEditingLog] = useState<Log | null>(null)
   const [activeDate, setActiveDate] = useState<string>('')
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setTagDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -42,15 +53,12 @@ export default function LogPage() {
         .order('log_date', { ascending: false })
       const logsData = data || []
       setLogs(logsData)
-
       const usedTags = logsData.flatMap((l: Log) => l.tags || [])
       const extra = usedTags.filter((t: string) => !DEFAULT_TAGS.includes(t))
       if (extra.length) setAllTags([...DEFAULT_TAGS, ...new Set<string>(extra)])
-
       const todayLog = logsData.find((l: Log) => l.log_date === todayStr)
       if (todayLog) loadLog(todayLog)
       else setActiveDate(todayStr)
-
       setLoading(false)
     }
     fetchLogs()
@@ -99,14 +107,12 @@ export default function LogPage() {
     setAllTags(prev => [...prev, tag])
     setSelectedTags(prev => [...prev, tag])
     setCustomTag('')
-    setShowCustomInput(false)
   }
 
   const handleSave = async () => {
     if (!content.trim() || !userId) return
     setSaving(true)
     const supabase = createClient()
-
     if (editingLog) {
       const { error } = await supabase
         .from('logs')
@@ -158,37 +164,24 @@ export default function LogPage() {
 
             {/* 날짜 네비게이션 */}
             <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={prevDate}
-                className="w-7 h-7 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-all text-lg"
-              >‹</button>
+              <button onClick={prevDate} className="w-7 h-7 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-all text-lg">‹</button>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
                   {formatDate(activeDate)}
                   <span className="text-white/30 ml-1.5">({getDayLabel(activeDate)})</span>
                 </span>
-                {isToday && (
-                  <span className="text-xs bg-white/10 text-white/50 px-2 py-0.5 rounded-full">오늘</span>
-                )}
-                {!isToday && hasLog && (
-                  <span className="text-xs bg-white/5 text-white/30 px-2 py-0.5 rounded-full">수정</span>
-                )}
+                {isToday && <span className="text-xs bg-white/10 text-white/50 px-2 py-0.5 rounded-full">오늘</span>}
+                {!isToday && hasLog && <span className="text-xs bg-white/5 text-white/30 px-2 py-0.5 rounded-full">수정</span>}
               </div>
               <button
                 onClick={nextDate}
                 disabled={isToday}
-                className={`w-7 h-7 flex items-center justify-center rounded-md transition-all text-lg ${
-                  isToday ? 'text-white/15 cursor-default' : 'text-white/40 hover:text-white hover:bg-white/10'
-                }`}
+                className={`w-7 h-7 flex items-center justify-center rounded-md transition-all text-lg ${isToday ? 'text-white/15 cursor-default' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
               >›</button>
             </div>
 
-            {/* 오늘로 돌아가기 */}
             {!isToday && (
-              <button
-                onClick={() => loadDate(todayStr)}
-                className="w-full text-xs text-white/30 hover:text-white/60 transition-colors mb-4 text-center"
-              >
+              <button onClick={() => loadDate(todayStr)} className="w-full text-xs text-white/30 hover:text-white/60 transition-colors mb-4 text-center">
                 오늘로 돌아가기 →
               </button>
             )}
@@ -205,7 +198,7 @@ export default function LogPage() {
               />
             </div>
 
-            {/* 하루 요약 - Gemini 예정 */}
+            {/* 하루 요약 */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs text-white/40">하루 요약</label>
@@ -216,46 +209,78 @@ export default function LogPage() {
               </div>
             </div>
 
-            {/* 태그 */}
-            <div className="mb-6">
+            {/* 태그 - 노션 스타일 드롭다운 */}
+            <div className="mb-6" ref={dropdownRef}>
               <label className="text-xs text-white/40 mb-2 block">태그</label>
-              <div className="flex flex-wrap gap-2">
-                {allTags.map(tag => (
-                  <button
+
+              {/* 인풋창 - 선택된 태그 뱃지 + 드롭다운 트리거 */}
+              <div
+                onClick={() => setTagDropdownOpen(prev => !prev)}
+                className="min-h-[42px] w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 flex flex-wrap gap-1.5 items-center cursor-pointer hover:border-white/20 transition-colors"
+              >
+                {selectedTags.length === 0 && (
+                  <span className="text-sm text-white/20">태그 선택...</span>
+                )}
+                {selectedTags.map(tag => (
+                  <span
                     key={tag}
-                    onClick={() => toggleTag(tag)}
-                    className={`px-3 py-1 rounded-full text-xs transition-all ${
-                      selectedTags.includes(tag)
-                        ? 'bg-white text-black font-medium'
-                        : 'bg-white/8 text-white/50 hover:bg-white/15'
-                    }`}
+                    className="flex items-center gap-1 bg-white/15 text-white/80 text-xs px-2 py-0.5 rounded-md"
                   >
                     {tag}
-                  </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleTag(tag) }}
+                      className="text-white/40 hover:text-white ml-0.5 leading-none"
+                    >×</button>
+                  </span>
                 ))}
-                {showCustomInput ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      autoFocus
-                      type="text"
-                      value={customTag}
-                      onChange={e => setCustomTag(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addCustomTag()}
-                      placeholder="태그 입력"
-                      className="bg-white/10 border border-white/20 rounded-full px-3 py-1 text-xs text-white placeholder-white/30 focus:outline-none w-24"
-                    />
-                    <button onClick={addCustomTag} className="text-xs text-white/50 hover:text-white">추가</button>
-                    <button onClick={() => setShowCustomInput(false)} className="text-xs text-white/30 hover:text-white">✕</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowCustomInput(true)}
-                    className="px-3 py-1 rounded-full text-xs bg-white/5 text-white/30 hover:bg-white/10 border border-dashed border-white/20"
-                  >
-                    + 직접 입력
-                  </button>
-                )}
+                <span className="ml-auto text-white/20 text-xs">{tagDropdownOpen ? '▲' : '▼'}</span>
               </div>
+
+              {/* 드롭다운 */}
+              {tagDropdownOpen && (
+                <div className="mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg overflow-hidden shadow-xl z-20 relative">
+                  <div className="p-2 flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                    {allTags.map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        className={`flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors text-left ${
+                          selectedTags.includes(tag)
+                            ? 'bg-white/10 text-white'
+                            : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+                        }`}
+                      >
+                        <span>{tag}</span>
+                        {selectedTags.includes(tag) && (
+                          <span className="text-white/50 text-xs">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 커스텀 태그 추가 */}
+                  <div className="border-t border-white/8 p-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={customTag}
+                        onChange={e => setCustomTag(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addCustomTag()}
+                        placeholder="+ 새 태그 추가"
+                        className="flex-1 bg-transparent text-sm text-white placeholder-white/25 focus:outline-none px-2 py-1"
+                      />
+                      {customTag.trim() && (
+                        <button
+                          onClick={addCustomTag}
+                          className="text-xs text-white/50 hover:text-white bg-white/10 px-2 py-1 rounded-md transition-colors"
+                        >
+                          추가
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button
