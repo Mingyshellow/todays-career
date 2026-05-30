@@ -1,22 +1,70 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase'
 
-const DEFAULT_TAGS = ['개발', '기획', '설계', '협업', '문서', '리뷰', '테스트', '배포', '회의', '학습', '기타']
+const DEFAULT_TAGS = ['개발', '디자인', '기획', '학습', '네트워킹', '기타']
 
-export default function Log() {
-  const [did, setDid] = useState('')
-  const [learned, setLearned] = useState('')
-  const [tomorrow, setTomorrow] = useState('')
-  const [memo, setMemo] = useState('')
+type Log = {
+  id: string
+  log_date: string
+  content: string
+  summary: string
+  tags: string[]
+}
+
+export default function LogPage() {
+  const [logs, setLogs] = useState<Log[]>([])
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState<string | null>(null)
+
+  // 입력 상태
+  const [content, setContent] = useState('')
+  const [summary, setSummary] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [tags, setTags] = useState(DEFAULT_TAGS)
-  const [newTag, setNewTag] = useState('')
-  const [showInput, setShowInput] = useState(false)
-  const [highlightedTag, setHighlightedTag] = useState<string | null>(null)
-  const [toast, setToast] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [customTag, setCustomTag] = useState('')
+  const [showCustomInput, setShowCustomInput] = useState(false)
+  const [allTags, setAllTags] = useState(DEFAULT_TAGS)
+  const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  const todayLog = logs.find(l => l.log_date === todayStr)
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setUserId(user.id)
+      const { data } = await supabase
+        .from('logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('log_date', { ascending: false })
+      const logsData = data || []
+      setLogs(logsData)
+
+      // 기존 커스텀 태그 수집
+      const usedTags = logsData.flatMap(l => l.tags || [])
+      const extra = usedTags.filter(t => !DEFAULT_TAGS.includes(t))
+      if (extra.length) setAllTags([...DEFAULT_TAGS, ...new Set(extra)])
+
+      setLoading(false)
+    }
+    fetchLogs()
+  }, [])
+
+  // 오늘 일지 있으면 폼에 미리 채우기
+  useEffect(() => {
+    if (todayLog && !editingId) {
+      setContent(todayLog.content || '')
+      setSummary(todayLog.summary || '')
+      setSelectedTags(todayLog.tags || [])
+      setEditingId(todayLog.id)
+    }
+  }, [todayLog])
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -24,159 +72,196 @@ export default function Log() {
     )
   }
 
-  const addTag = () => {
-    const trimmed = newTag.trim()
-    if (trimmed && !tags.includes(trimmed)) {
-      setTags(prev => [...prev, trimmed])
-      setSelectedTags(prev => [...prev, trimmed])
-      setHighlightedTag(trimmed)
-      setTimeout(() => setHighlightedTag(null), 3000)
-    }
-    setNewTag('')
-    setShowInput(false)
+  const addCustomTag = () => {
+    const tag = customTag.trim()
+    if (!tag || allTags.includes(tag)) return
+    setAllTags(prev => [...prev, tag])
+    setSelectedTags(prev => [...prev, tag])
+    setCustomTag('')
+    setShowCustomInput(false)
   }
 
   const handleSave = async () => {
-    if (!did.trim()) {
-      alert('오늘 한 일을 입력해주세요!')
-      return
-    }
-    setLoading(true)
+    if (!content.trim() || !userId) return
+    setSaving(true)
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      alert('로그인이 필요해요!')
-      setLoading(false)
-      return
-    }
-    const { error } = await supabase.from('logs').insert({
-      user_id: user.id,
-      log_date: new Date().toISOString().split('T')[0],
-      did,
-      learned: learned || null,
-      tomorrow: tomorrow || null,
-      tags: selectedTags,
-      memo: memo || null,
-    })
-    if (error) {
-      alert('저장 중 오류가 발생했어요: ' + error.message)
+
+    if (editingId) {
+      const { error } = await supabase
+        .from('logs')
+        .update({ content, summary, tags: selectedTags })
+        .eq('id', editingId)
+      if (!error) {
+        setLogs(prev => prev.map(l =>
+          l.id === editingId ? { ...l, content, summary, tags: selectedTags } : l
+        ))
+      }
     } else {
-      setToast(true)
-      setTimeout(() => setToast(false), 3000)
-      setDid('')
-      setLearned('')
-      setTomorrow('')
-      setMemo('')
-      setSelectedTags([])
+      const { data, error } = await supabase
+        .from('logs')
+        .insert({ user_id: userId, log_date: todayStr, content, summary, tags: selectedTags })
+        .select()
+        .single()
+      if (!error && data) {
+        setLogs(prev => [data, ...prev])
+        setEditingId(data.id)
+      }
     }
-    setLoading(false)
+    setSaving(false)
+  }
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr)
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  const getDayLabel = (dateStr: string) => {
+    const days = ['일', '월', '화', '수', '목', '금', '토']
+    return days[new Date(dateStr).getDay()]
   }
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
-      <h1 className="text-2xl font-bold mb-2">오늘의 기록</h1>
-      <p className="text-white/40 text-sm mb-10">오늘 하루를 기록해보세요</p>
+      <h1 className="text-2xl font-bold mb-2">일지 기록</h1>
+      <p className="text-white/40 text-sm mb-10">오늘 하루를 기록해보세요.</p>
 
-      <div className="flex flex-col gap-6">
+      {/* 입력 폼 */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-12">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm font-medium">
+            {formatDate(todayStr)} <span className="text-white/30">({getDayLabel(todayStr)})</span>
+          </span>
+          {editingId && <span className="text-xs text-white/30">수정 중</span>}
+        </div>
 
-        <div>
-          <label className="text-sm text-white/60 mb-2 block">오늘 한 일 *</label>
+        {/* 오늘 한 일 */}
+        <div className="mb-4">
+          <label className="text-xs text-white/40 mb-2 block">오늘 한 일</label>
           <textarea
-            value={did}
-            onChange={e => setDid(e.target.value)}
+            value={content}
+            onChange={e => setContent(e.target.value)}
             placeholder="오늘 어떤 일을 했나요?"
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 resize-none focus:outline-none focus:border-white/30 transition-colors"
-            rows={3}
+            rows={4}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors resize-none"
           />
         </div>
 
-        <div>
-          <label className="text-sm text-white/60 mb-2 block">배운 것</label>
-          <textarea
-            value={learned}
-            onChange={e => setLearned(e.target.value)}
-            placeholder="오늘 새롭게 배운 것이 있나요?"
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 resize-none focus:outline-none focus:border-white/30 transition-colors"
-            rows={3}
+        {/* 하루 요약 */}
+        <div className="mb-4">
+          <label className="text-xs text-white/40 mb-2 block">하루 요약 (한 줄)</label>
+          <input
+            type="text"
+            value={summary}
+            onChange={e => setSummary(e.target.value)}
+            placeholder="오늘 하루를 한 문장으로 요약하면?"
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors"
           />
         </div>
 
-        <div>
-          <label className="text-sm text-white/60 mb-2 block">내일 할 일</label>
-          <textarea
-            value={tomorrow}
-            onChange={e => setTomorrow(e.target.value)}
-            placeholder="내일 해야 할 일은 무엇인가요?"
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 resize-none focus:outline-none focus:border-white/30 transition-colors"
-            rows={3}
-          />
-        </div>
-
-        <div>
-          <label className="text-sm text-white/60 mb-3 block">태그</label>
+        {/* 태그 */}
+        <div className="mb-6">
+          <label className="text-xs text-white/40 mb-2 block">태그</label>
           <div className="flex flex-wrap gap-2">
-            {tags.map(tag => (
+            {allTags.map(tag => (
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
-                className={`px-3 py-1 rounded-full text-xs border transition-all duration-500 ${
-                  highlightedTag === tag
-                    ? 'bg-white text-black border-white scale-110'
-                    : selectedTags.includes(tag)
-                    ? 'bg-white text-black border-white'
-                    : 'bg-transparent text-white/60 border-white/20 hover:border-white/40'
+                className={`px-3 py-1 rounded-full text-xs transition-all ${
+                  selectedTags.includes(tag)
+                    ? 'bg-white text-black font-medium'
+                    : 'bg-white/10 text-white/50 hover:bg-white/15'
                 }`}
               >
                 {tag}
               </button>
             ))}
-            {showInput ? (
-              <input
-                autoFocus
-                value={newTag}
-                onChange={e => setNewTag(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addTag()}
-                onBlur={addTag}
-                placeholder="태그 입력"
-                className="px-3 py-1 rounded-full text-xs border border-white/40 bg-white/5 text-white placeholder-white/30 focus:outline-none w-24"
-              />
+            {showCustomInput ? (
+              <div className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  type="text"
+                  value={customTag}
+                  onChange={e => setCustomTag(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addCustomTag()}
+                  placeholder="태그 입력"
+                  className="bg-white/10 border border-white/20 rounded-full px-3 py-1 text-xs text-white placeholder-white/30 focus:outline-none w-24"
+                />
+                <button onClick={addCustomTag} className="text-xs text-white/50 hover:text-white">추가</button>
+                <button onClick={() => setShowCustomInput(false)} className="text-xs text-white/30 hover:text-white">✕</button>
+              </div>
             ) : (
               <button
-                onClick={() => setShowInput(true)}
-                className="px-3 py-1 rounded-full text-xs border border-white/20 text-white/40 hover:border-white/40 hover:text-white/60 transition-colors"
+                onClick={() => setShowCustomInput(true)}
+                className="px-3 py-1 rounded-full text-xs bg-white/5 text-white/30 hover:bg-white/10 border border-dashed border-white/20"
               >
-                + 추가
+                + 직접 입력
               </button>
             )}
           </div>
         </div>
 
-        <div>
-          <label className="text-sm text-white/60 mb-2 block">기타 사항</label>
-          <textarea
-            value={memo}
-            onChange={e => setMemo(e.target.value)}
-            placeholder="메모, 링크, 참고자료 등"
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 resize-none focus:outline-none focus:border-white/30 transition-colors"
-            rows={2}
-          />
-        </div>
-
         <button
           onClick={handleSave}
-          disabled={loading}
-          className="w-full py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50"
+          disabled={!content.trim() || saving}
+          className="w-full py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-30"
         >
-          {loading ? '저장 중...' : '기록 저장'}
+          {saving ? '저장 중...' : editingId ? '수정 완료' : '기록 저장'}
         </button>
-
       </div>
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white text-black text-sm px-6 py-3 rounded-full shadow-lg">
-          기록이 저장됐어요 ✓
-        </div>
-      )}
+      {/* 타임라인 */}
+      <div>
+        <h2 className="text-sm font-medium mb-6">기록 타임라인</h2>
+        {loading ? (
+          <div className="text-white/30 text-sm text-center py-8">불러오는 중...</div>
+        ) : logs.length === 0 ? (
+          <div className="text-white/20 text-sm text-center py-8">아직 기록이 없어요.</div>
+        ) : (
+          <div className="relative">
+            {/* 타임라인 선 */}
+            <div className="absolute left-[7px] top-0 bottom-0 w-px bg-white/10" />
+
+            <div className="flex flex-col gap-6">
+              {logs.map(log => (
+                <div key={log.id} className="flex gap-4 relative">
+                  {/* 점 */}
+                  <div className={`w-3.5 h-3.5 rounded-full border-2 mt-1 flex-shrink-0 z-10 ${
+                    log.log_date === todayStr
+                      ? 'bg-white border-white'
+                      : 'bg-transparent border-white/30'
+                  }`} />
+
+                  <div className="flex-1 pb-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs text-white/40">{formatDate(log.log_date)}</span>
+                      <span className="text-xs text-white/20">{getDayLabel(log.log_date)}</span>
+                      {log.log_date === todayStr && (
+                        <span className="text-xs bg-white/10 text-white/50 px-2 py-0.5 rounded-full">오늘</span>
+                      )}
+                    </div>
+
+                    {log.summary && (
+                      <p className="text-sm font-medium text-white mb-2">{log.summary}</p>
+                    )}
+
+                    <p className="text-sm text-white/50 leading-relaxed mb-3">{log.content}</p>
+
+                    {log.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {log.tags.map(tag => (
+                          <span key={tag} className="text-xs bg-white/8 text-white/40 px-2 py-0.5 rounded-full">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
