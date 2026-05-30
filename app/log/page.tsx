@@ -151,6 +151,16 @@ export default function LogPage() {
   const isToday = activeDate === todayStr
   const hasLog = !!editingLog
 
+  if (loading) return (
+    <div className="max-w-5xl mx-auto px-6 py-12">
+      <h1 className="text-2xl font-bold mb-2">일지 기록</h1>
+      <p className="text-white/40 text-sm mb-10">오늘 하루를 기록하거나 이전 기록을 수정하세요.</p>
+      <div className="flex items-center justify-center py-20">
+        <div className="text-white/20 text-sm">불러오는 중...</div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
       <h1 className="text-2xl font-bold mb-2">일지 기록</h1>
@@ -212,8 +222,6 @@ export default function LogPage() {
             {/* 태그 - 노션 스타일 드롭다운 */}
             <div className="mb-6" ref={dropdownRef}>
               <label className="text-xs text-white/40 mb-2 block">태그</label>
-
-              {/* 인풋창 - 선택된 태그 뱃지 + 드롭다운 트리거 */}
               <div
                 onClick={() => setTagDropdownOpen(prev => !prev)}
                 className="min-h-[42px] w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 flex flex-wrap gap-1.5 items-center cursor-pointer hover:border-white/20 transition-colors"
@@ -222,10 +230,7 @@ export default function LogPage() {
                   <span className="text-sm text-white/20">태그 선택...</span>
                 )}
                 {selectedTags.map(tag => (
-                  <span
-                    key={tag}
-                    className="flex items-center gap-1 bg-white/15 text-white/80 text-xs px-2 py-0.5 rounded-md"
-                  >
+                  <span key={tag} className="flex items-center gap-1 bg-white/15 text-white/80 text-xs px-2 py-0.5 rounded-md">
                     {tag}
                     <button
                       onClick={e => { e.stopPropagation(); toggleTag(tag) }}
@@ -236,7 +241,6 @@ export default function LogPage() {
                 <span className="ml-auto text-white/20 text-xs">{tagDropdownOpen ? '▲' : '▼'}</span>
               </div>
 
-              {/* 드롭다운 */}
               {tagDropdownOpen && (
                 <div className="mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg overflow-hidden shadow-xl z-20 relative">
                   <div className="p-2 flex flex-col gap-0.5 max-h-48 overflow-y-auto">
@@ -251,14 +255,10 @@ export default function LogPage() {
                         }`}
                       >
                         <span>{tag}</span>
-                        {selectedTags.includes(tag) && (
-                          <span className="text-white/50 text-xs">✓</span>
-                        )}
+                        {selectedTags.includes(tag) && <span className="text-white/50 text-xs">✓</span>}
                       </button>
                     ))}
                   </div>
-
-                  {/* 커스텀 태그 추가 */}
                   <div className="border-t border-white/8 p-2">
                     <div className="flex items-center gap-2">
                       <input
@@ -296,9 +296,7 @@ export default function LogPage() {
         {/* 오른쪽: 타임라인 */}
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-medium mb-6 text-white/60">기록 타임라인</h2>
-          {loading ? (
-            <div className="text-white/30 text-sm text-center py-8">불러오는 중...</div>
-          ) : logs.length === 0 ? (
+          {logs.length === 0 ? (
             <div className="text-white/20 text-sm text-center py-12">아직 기록이 없어요.</div>
           ) : (
             <div className="relative">
@@ -308,7 +306,6 @@ export default function LogPage() {
                   const currentMonth = log.log_date.slice(0, 7)
                   const prevMonth = index > 0 ? logs[index - 1].log_date.slice(0, 7) : null
                   const showMonthHeader = currentMonth !== prevMonth
-
                   return (
                     <div key={log.id}>
                       {showMonthHeader && (
