@@ -39,7 +39,7 @@ export default function Dashboard() {
     const supabase = createClient()
     const { error } = await supabase
       .from('logs')
-      .insert({ user_id: userId, log_date: todayStr, content: '출석체크' })
+      .insert({ user_id: userId, log_date: todayStr, did: '출석체크' })
     if (!error) {
       setLogs(prev => [...prev, { log_date: todayStr }])
       setJustChecked(true)
@@ -79,7 +79,6 @@ export default function Dashboard() {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const startOffset = firstDay === 0 ? 6 : firstDay - 1
 
-  // 6주 고정 (42칸) - 항상 같은 높이 유지
   const totalCells = 42
   const calendarDays = Array.from({ length: totalCells }, (_, i) => {
     const day = i - startOffset + 1
@@ -97,7 +96,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12">
-      {/* 헤더 */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold">대시보드</h1>
         <button
@@ -114,7 +112,6 @@ export default function Dashboard() {
       </div>
       <p className="text-white/40 text-sm mb-10">오늘도 기록해볼까요?</p>
 
-      {/* 스탯 카드 */}
       <div className="grid grid-cols-3 gap-4 mb-10">
         {[
           { label: '연속 기록', value: getStreak(), unit: '일' },
@@ -131,7 +128,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* 달력 */}
       <div className="mb-10">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-sm font-medium">출석 달력</h2>
@@ -153,14 +149,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 요일 헤더 */}
         <div className="grid grid-cols-7 mb-2">
           {['월', '화', '수', '목', '금', '토', '일'].map(d => (
             <div key={d} className="text-center text-xs text-white/20 py-1 font-medium">{d}</div>
           ))}
         </div>
 
-        {/* 날짜 그리드 */}
         <div className="grid grid-cols-7 gap-1.5">
           {calendarDays.map((day, i) => {
             if (!day) return <div key={`empty-${i}`} className="aspect-square" />
@@ -173,21 +167,19 @@ export default function Dashboard() {
             return (
               <div
                 key={dateStr}
-                className={`aspect-square rounded-lg flex flex-col items-center justify-center relative transition-all duration-300 ${
+                style={{ transition: 'all 0.3s ease' }}
+                className={`aspect-square rounded-lg flex items-center justify-center ${
                   isLogged
-                    ? 'bg-white shadow-lg shadow-white/10'
+                    ? 'bg-white shadow-lg'
                     : isToday
                     ? 'border-2 border-white/50 bg-white/5'
                     : isFuture
-                    ? 'bg-transparent'
-                    : 'bg-white/5 hover:bg-white/8'
+                    ? ''
+                    : 'bg-white/5'
                 } ${isJustChecked ? 'scale-110' : ''}`}
               >
                 {isLogged ? (
-                  <svg
-                    width="12" height="12" viewBox="0 0 12 12" fill="none"
-                    className={`transition-all duration-300 ${isJustChecked ? 'scale-125' : ''}`}
-                  >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                     <path d="M2 6L5 9L10 3" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 ) : (
@@ -203,7 +195,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 이번 주 요약 */}
       <div className="mb-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium">이번 주 요약</h2>
@@ -214,7 +205,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 성장 추천 */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium">성장 추천</h2>
@@ -223,14 +213,6 @@ export default function Dashboard() {
           기록이 쌓이면 맞춤 추천이 나타나요.
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes checkPop {
-          0% { transform: scale(0.8); opacity: 0; }
-          60% { transform: scale(1.2); }
-          100% { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
     </div>
   )
 }
