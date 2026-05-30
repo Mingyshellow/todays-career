@@ -12,108 +12,238 @@ const JOB_CATEGORIES = [
   { id: 'other', label: '기타', icon: '✏️' },
 ]
 
-const JOB_SECTIONS: Record<string, string[]> = {
-  developer: ['프로필', '기술 스택', '경력', '프로젝트', '교육'],
-  designer: ['프로필', '툴 & 스킬', '경력', '포트폴리오', '교육'],
-  planner: ['프로필', '핵심 역량', '경력', '프로젝트', '교육'],
-  marketer: ['프로필', '마케팅 스킬', '경력', '캠페인 성과', '교육'],
-  data: ['프로필', '기술 스택', '경력', '분석 프로젝트', '교육'],
-  other: ['프로필', '핵심 역량', '경력', '주요 성과', '교육'],
+const SKILL_PLACEHOLDER: Record<string, string> = {
+  developer: 'React, TypeScript, Node.js...',
+  designer: 'Figma, Photoshop, Illustrator...',
+  planner: '서비스 기획, 데이터 분석, Jira...',
+  marketer: 'Google Ads, SEO, Meta Ads...',
+  data: 'Python, SQL, Tableau...',
+  other: '보유 스킬 입력...',
 }
 
-type Profile = { name: string; email: string; phone: string; github: string; blog: string; intro: string }
 type Career = { company: string; role: string; period: string; description: string }
 type Project = { name: string; description: string; tech: string; link: string }
 type Education = { school: string; major: string; period: string }
+type ResumeData = {
+  job_id: string
+  job_label: string
+  name: string
+  email: string
+  phone: string
+  github: string
+  blog: string
+  intro: string
+  skills: string[]
+  careers: Career[]
+  projects: Project[]
+  educations: Education[]
+}
+
+const defaultResume = (): ResumeData => ({
+  job_id: '', job_label: '',
+  name: '', email: '', phone: '', github: '', blog: '', intro: '',
+  skills: [],
+  careers: [{ company: '', role: '', period: '', description: '' }],
+  projects: [{ name: '', description: '', tech: '', link: '' }],
+  educations: [{ school: '', major: '', period: '' }],
+})
 
 export default function ResumePage() {
-  const [step, setStep] = useState<'select' | 'form'>('select')
-  const [jobId, setJobId] = useState('')
+  const [step, setStep] = useState<'loading' | 'onboarding' | 'form'>('loading')
+  const [resume, setResume] = useState<ResumeData>(defaultResume())
   const [customJob, setCustomJob] = useState('')
+  const [skillInput, setSkillInput] = useState('')
   const [activeSection, setActiveSection] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [resumeId, setResumeId] = useState<string | null>(null)
+  const [logCount, setLogCount] = useState(0)
 
-  const [profile, setProfile] = useState<Profile>({
-    name: '', email: '', phone: '', github: '', blog: '', intro: ''
-  })
-  const [skills, setSkills] = useState<string[]>([])
-  const [skillInput, setSkillInput] = useState('')
-  const [careers, setCareers] = useState<Career[]>([{ company: '', role: '', period: '', description: '' }])
-  const [projects, setProjects] = useState<Project[]>([{ name: '', description: '', tech: '', link: '' }])
-  const [educations, setEducations] = useState<Education[]>([{ school: '', major: '', period: '' }])
+  useEffect(() => {
+    const init = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setUserId(user.id)
 
-  const jobLabel = jobId === 'other' ? customJob : JOB_CATEGORIES.find(j => j.id === jobId)?.label || ''
-  const sections = JOB_SECTIONS[jobId] || JOB_SECTIONS['other']
-  const sectionLabel2 = sections[1]
+      // 기존 이력서 불러오기
+      const { data: existing } = await supabase
+        .from('resumes')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+
+      // 일지 수 불러오기
+      const { count } = await supabase
+        .from('logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+      setLogCount(count || 0)
+
+      if (existing) {
+        setResumeId(existing.id)
+        setResume({
+          job_id: existing.job_id || '',
+          job_label: existing.job_label || '',
+          name: existing.name || '',
+          email: existing.email || '',
+          phone: existing.phone || '',
+          github: existing.github || '',
+          blog: existing.blog || '',
+          intro: existing.intro || '',
+          skills: existing.skills || [],
+          careers: existing.careers?.length ? existing.careers : [{ company: '', role: '', period: '', description: '' }],
+          projects: existing.projects?.length ? existing.projects : [{ name: '', description: '', tech: '', link: '' }],
+          educations: existing.educations?.length ? existing.educations : [{ school: '', major: '', period: '' }],
+        })
+        setStep('form')
+      } else {
+        setStep('onboarding')
+      }
+    }
+    init()
+  }, [])
+
+  const handleSave = async () => {
+    if (!userId) return
+    setSaving(true)
+    const supabase = createClient()
+    const payload = {
+      user_id: userId,
+      ...resume,
+      job_label: resume.job_id === 'other' ? customJob : JOB_CATEGORIES.find(j => j.id === resume.job_id)?.label || '',
+      updated_at: new Date().toISOString(),
+    }
+    if (resumeId) {
+      await supabase.from('resumes').update(payload).eq('id', resumeId)
+    } else {
+      const { data } = await supabase.from('resumes').insert(payload).select().single()
+      if (data) setResumeId(data.id)
+    }
+    setSaving(false)
+    setSaveMsg('저장됐어요!')
+    setTimeout(() => setSaveMsg(''), 2000)
+    setStep('form')
+  }
+
+  const set = (key: keyof ResumeData, val: any) => setResume(prev => ({ ...prev, [key]: val }))
 
   const addSkill = () => {
     const s = skillInput.trim()
-    if (!s || skills.includes(s)) return
-    setSkills(prev => [...prev, s])
+    if (!s || resume.skills.includes(s)) return
+    set('skills', [...resume.skills, s])
     setSkillInput('')
   }
 
-  const removeSkill = (s: string) => setSkills(prev => prev.filter(x => x !== s))
+  const jobLabel = resume.job_id === 'other'
+    ? customJob
+    : JOB_CATEGORIES.find(j => j.id === resume.job_id)?.label || ''
 
-  const handlePrint = () => window.print()
+  const sections = ['프로필', '스킬', '경력', '프로젝트', '교육']
 
-  if (step === 'select') return (
+  // 온보딩
+  if (step === 'loading') return (
     <div className="max-w-2xl mx-auto px-6 py-12">
-      <h1 className="text-2xl font-bold mb-2">이력서 만들기</h1>
-      <p className="text-white/40 text-sm mb-10">직무를 선택하면 맞춤 이력서 양식을 제공해드려요.</p>
+      <div className="text-white/20 text-sm text-center py-20">불러오는 중...</div>
+    </div>
+  )
 
-      <div className="grid grid-cols-3 gap-3 mb-8">
-        {JOB_CATEGORIES.map(job => (
-          <button
-            key={job.id}
-            onClick={() => setJobId(job.id)}
-            className={`p-5 rounded-xl border transition-all text-left ${
-              jobId === job.id
-                ? 'border-white bg-white/10'
-                : 'border-white/10 bg-white/5 hover:border-white/30 hover:bg-white/8'
-            }`}
-          >
-            <div className="text-2xl mb-2">{job.icon}</div>
-            <div className="text-sm font-medium">{job.label}</div>
-          </button>
-        ))}
-      </div>
+  if (step === 'onboarding') return (
+    <div className="max-w-xl mx-auto px-6 py-12">
+      <h1 className="text-2xl font-bold mb-2">이력서 시작하기</h1>
+      <p className="text-white/40 text-sm mb-10">기본 정보를 입력하면 일지 기록을 바탕으로 이력서가 자동으로 채워져요.</p>
 
-      {jobId === 'other' && (
-        <div className="mb-8">
-          <label className="text-xs text-white/40 mb-2 block">직무명 직접 입력</label>
+      {/* 직무 선택 */}
+      <div className="mb-8">
+        <label className="text-xs text-white/40 mb-3 block">직무 선택</label>
+        <div className="grid grid-cols-3 gap-2">
+          {JOB_CATEGORIES.map(job => (
+            <button
+              key={job.id}
+              onClick={() => set('job_id', job.id)}
+              className={`p-4 rounded-xl border transition-all text-left ${
+                resume.job_id === job.id
+                  ? 'border-white bg-white/10'
+                  : 'border-white/10 bg-white/5 hover:border-white/25'
+              }`}
+            >
+              <div className="text-xl mb-1.5">{job.icon}</div>
+              <div className="text-sm font-medium">{job.label}</div>
+            </button>
+          ))}
+        </div>
+        {resume.job_id === 'other' && (
           <input
             type="text"
             value={customJob}
             onChange={e => setCustomJob(e.target.value)}
-            placeholder="예: UX 리서처, 콘텐츠 크리에이터..."
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
+            placeholder="직무명 입력 (예: UX 리서처)"
+            className="mt-3 w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
           />
+        )}
+      </div>
+
+      {/* 기본 정보 */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-8">
+        <h2 className="text-sm font-medium mb-4">기본 정보</h2>
+        <div className="flex flex-col gap-3">
+          {([
+            { key: 'name', label: '이름 *', placeholder: '홍길동' },
+            { key: 'email', label: '이메일 *', placeholder: 'hello@example.com' },
+            { key: 'phone', label: '연락처', placeholder: '010-0000-0000' },
+            { key: 'github', label: resume.job_id === 'designer' ? '포트폴리오 URL' : 'GitHub / 링크', placeholder: 'https://' },
+            { key: 'blog', label: '블로그 / 링크드인', placeholder: 'https://' },
+          ] as { key: keyof ResumeData; label: string; placeholder: string }[]).map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <label className="text-xs text-white/40 mb-1.5 block">{label}</label>
+              <input
+                type="text"
+                value={resume[key] as string}
+                onChange={e => set(key, e.target.value)}
+                placeholder={placeholder}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
+              />
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       <button
-        onClick={() => jobId && (jobId !== 'other' || customJob.trim()) && setStep('form')}
-        disabled={!jobId || (jobId === 'other' && !customJob.trim())}
+        onClick={handleSave}
+        disabled={!resume.job_id || !resume.name || !resume.email || saving || (resume.job_id === 'other' && !customJob.trim())}
         className="w-full py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-30"
       >
-        이력서 작성 시작 →
+        {saving ? '저장 중...' : '이력서 시작하기 →'}
       </button>
     </div>
   )
 
+  // 메인 폼
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
+      {/* 헤더 */}
       <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setStep('select')} className="text-white/30 hover:text-white text-sm transition-colors">← 직무 변경</button>
-          <span className="text-white/20">|</span>
-          <span className="text-sm text-white/60">{jobLabel} 이력서</span>
+        <div>
+          <h1 className="text-2xl font-bold mb-1">이력서</h1>
+          <div className="flex items-center gap-2 text-sm text-white/40">
+            <span>{jobLabel}</span>
+            <span>·</span>
+            <span>일지 {logCount}개 기록됨</span>
+            {logCount > 0 && <span className="text-xs bg-white/5 text-white/30 px-2 py-0.5 rounded-full">Gemini 자동완성 연동 예정</span>}
+          </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-white/20 bg-white/5 px-2 py-1 rounded-full">Gemini 자동완성 예정</span>
+          {saveMsg && <span className="text-xs text-white/40">{saveMsg}</span>}
           <button
-            onClick={handlePrint}
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-colors"
+          >
+            {saving ? '저장 중...' : '저장'}
+          </button>
+          <button
+            onClick={() => window.print()}
             className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors"
           >
             PDF 저장
@@ -121,19 +251,28 @@ export default function ResumePage() {
         </div>
       </div>
 
+      {/* 일지 기반 업데이트 알림 */}
+      {logCount > 0 && (
+        <div className="bg-white/3 border border-white/8 rounded-xl p-4 mb-8 flex items-center gap-3">
+          <span className="text-lg">✨</span>
+          <div>
+            <p className="text-sm text-white/70">일지 {logCount}개가 쌓였어요!</p>
+            <p className="text-xs text-white/30 mt-0.5">Gemini 연동 후 일지 내용을 분석해 이력서를 자동으로 업데이트해드려요.</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-8 items-start">
         {/* 왼쪽: 폼 */}
         <div className="w-[420px] flex-shrink-0">
           {/* 섹션 탭 */}
-          <div className="flex gap-1 mb-6 flex-wrap">
+          <div className="flex gap-1 mb-5 flex-wrap">
             {sections.map((s, i) => (
               <button
                 key={s}
                 onClick={() => setActiveSection(i)}
                 className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
-                  activeSection === i
-                    ? 'bg-white text-black font-medium'
-                    : 'bg-white/5 text-white/50 hover:bg-white/10'
+                  activeSection === i ? 'bg-white text-black font-medium' : 'bg-white/5 text-white/50 hover:bg-white/10'
                 }`}
               >
                 {s}
@@ -145,20 +284,20 @@ export default function ResumePage() {
             {/* 프로필 */}
             {activeSection === 0 && (
               <div className="flex flex-col gap-4">
-                <h3 className="text-sm font-medium mb-2">프로필</h3>
+                <h3 className="text-sm font-medium">프로필</h3>
                 {([
                   { key: 'name', label: '이름', placeholder: '홍길동' },
                   { key: 'email', label: '이메일', placeholder: 'hello@example.com' },
                   { key: 'phone', label: '연락처', placeholder: '010-0000-0000' },
-                  { key: 'github', label: jobId === 'designer' ? '포트폴리오 URL' : 'GitHub', placeholder: 'https://' },
+                  { key: 'github', label: resume.job_id === 'designer' ? '포트폴리오 URL' : 'GitHub', placeholder: 'https://' },
                   { key: 'blog', label: '블로그 / 링크드인', placeholder: 'https://' },
-                ] as { key: keyof Profile; label: string; placeholder: string }[]).map(({ key, label, placeholder }) => (
+                ] as { key: keyof ResumeData; label: string; placeholder: string }[]).map(({ key, label, placeholder }) => (
                   <div key={key}>
                     <label className="text-xs text-white/40 mb-1.5 block">{label}</label>
                     <input
                       type="text"
-                      value={profile[key]}
-                      onChange={e => setProfile(prev => ({ ...prev, [key]: e.target.value }))}
+                      value={resume[key] as string}
+                      onChange={e => set(key, e.target.value)}
                       placeholder={placeholder}
                       className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
                     />
@@ -170,8 +309,8 @@ export default function ResumePage() {
                     <span className="text-xs text-white/20">Gemini 자동완성 예정</span>
                   </div>
                   <textarea
-                    value={profile.intro}
-                    onChange={e => setProfile(prev => ({ ...prev, intro: e.target.value }))}
+                    value={resume.intro}
+                    onChange={e => set('intro', e.target.value)}
                     placeholder="간략한 자기소개를 작성해주세요."
                     rows={4}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 resize-none"
@@ -183,26 +322,26 @@ export default function ResumePage() {
             {/* 스킬 */}
             {activeSection === 1 && (
               <div className="flex flex-col gap-4">
-                <h3 className="text-sm font-medium mb-2">{sectionLabel2}</h3>
+                <h3 className="text-sm font-medium">스킬</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={skillInput}
                     onChange={e => setSkillInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addSkill()}
-                    placeholder={jobId === 'developer' ? 'React, TypeScript...' : jobId === 'designer' ? 'Figma, Photoshop...' : '역량 입력'}
+                    placeholder={SKILL_PLACEHOLDER[resume.job_id] || '스킬 입력'}
                     className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
                   />
                   <button onClick={addSkill} className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-colors">추가</button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {skills.map(s => (
+                  {resume.skills.map(s => (
                     <span key={s} className="flex items-center gap-1.5 bg-white/10 text-white/70 text-xs px-3 py-1.5 rounded-full">
                       {s}
-                      <button onClick={() => removeSkill(s)} className="text-white/30 hover:text-white">×</button>
+                      <button onClick={() => set('skills', resume.skills.filter(x => x !== s))} className="text-white/30 hover:text-white">×</button>
                     </span>
                   ))}
-                  {skills.length === 0 && <p className="text-xs text-white/20">스킬을 추가해주세요</p>}
+                  {resume.skills.length === 0 && <p className="text-xs text-white/20">스킬을 추가해주세요</p>}
                 </div>
               </div>
             )}
@@ -211,12 +350,12 @@ export default function ResumePage() {
             {activeSection === 2 && (
               <div className="flex flex-col gap-6">
                 <h3 className="text-sm font-medium">경력</h3>
-                {careers.map((career, i) => (
+                {resume.careers.map((career, i) => (
                   <div key={i} className="flex flex-col gap-3 pb-6 border-b border-white/8 last:border-0 last:pb-0">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-white/40">경력 {i + 1}</span>
-                      {careers.length > 1 && (
-                        <button onClick={() => setCareers(prev => prev.filter((_, j) => j !== i))} className="text-xs text-white/20 hover:text-red-400 transition-colors">삭제</button>
+                      {resume.careers.length > 1 && (
+                        <button onClick={() => set('careers', resume.careers.filter((_, j) => j !== i))} className="text-xs text-white/20 hover:text-red-400">삭제</button>
                       )}
                     </div>
                     {([
@@ -229,7 +368,7 @@ export default function ResumePage() {
                         <input
                           type="text"
                           value={career[key]}
-                          onChange={e => setCareers(prev => prev.map((c, j) => j === i ? { ...c, [key]: e.target.value } : c))}
+                          onChange={e => set('careers', resume.careers.map((c, j) => j === i ? { ...c, [key]: e.target.value } : c))}
                           placeholder={placeholder}
                           className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
                         />
@@ -239,7 +378,7 @@ export default function ResumePage() {
                       <label className="text-xs text-white/40 mb-1.5 block">주요 업무</label>
                       <textarea
                         value={career.description}
-                        onChange={e => setCareers(prev => prev.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
+                        onChange={e => set('careers', resume.careers.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
                         placeholder="주요 업무와 성과를 작성해주세요."
                         rows={3}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 resize-none"
@@ -248,8 +387,8 @@ export default function ResumePage() {
                   </div>
                 ))}
                 <button
-                  onClick={() => setCareers(prev => [...prev, { company: '', role: '', period: '', description: '' }])}
-                  className="w-full py-2.5 border border-dashed border-white/15 rounded-lg text-xs text-white/30 hover:text-white/60 hover:border-white/30 transition-colors"
+                  onClick={() => set('careers', [...resume.careers, { company: '', role: '', period: '', description: '' }])}
+                  className="w-full py-2.5 border border-dashed border-white/15 rounded-lg text-xs text-white/30 hover:border-white/30 hover:text-white/60 transition-colors"
                 >
                   + 경력 추가
                 </button>
@@ -259,18 +398,18 @@ export default function ResumePage() {
             {/* 프로젝트 */}
             {activeSection === 3 && (
               <div className="flex flex-col gap-6">
-                <h3 className="text-sm font-medium">{sections[3]}</h3>
-                {projects.map((proj, i) => (
+                <h3 className="text-sm font-medium">프로젝트</h3>
+                {resume.projects.map((proj, i) => (
                   <div key={i} className="flex flex-col gap-3 pb-6 border-b border-white/8 last:border-0 last:pb-0">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-white/40">프로젝트 {i + 1}</span>
-                      {projects.length > 1 && (
-                        <button onClick={() => setProjects(prev => prev.filter((_, j) => j !== i))} className="text-xs text-white/20 hover:text-red-400 transition-colors">삭제</button>
+                      {resume.projects.length > 1 && (
+                        <button onClick={() => set('projects', resume.projects.filter((_, j) => j !== i))} className="text-xs text-white/20 hover:text-red-400">삭제</button>
                       )}
                     </div>
                     {([
                       { key: 'name', label: '프로젝트명', placeholder: '오늘의 커리어' },
-                      { key: 'tech', label: jobId === 'designer' ? '사용 툴' : '기술 스택', placeholder: jobId === 'designer' ? 'Figma, Illustrator' : 'Next.js, Supabase' },
+                      { key: 'tech', label: resume.job_id === 'designer' ? '사용 툴' : '기술 스택', placeholder: resume.job_id === 'designer' ? 'Figma, Illustrator' : 'Next.js, Supabase' },
                       { key: 'link', label: 'URL', placeholder: 'https://' },
                     ] as { key: keyof Project; label: string; placeholder: string }[]).map(({ key, label, placeholder }) => (
                       <div key={key}>
@@ -278,7 +417,7 @@ export default function ResumePage() {
                         <input
                           type="text"
                           value={proj[key]}
-                          onChange={e => setProjects(prev => prev.map((p, j) => j === i ? { ...p, [key]: e.target.value } : p))}
+                          onChange={e => set('projects', resume.projects.map((p, j) => j === i ? { ...p, [key]: e.target.value } : p))}
                           placeholder={placeholder}
                           className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
                         />
@@ -288,7 +427,7 @@ export default function ResumePage() {
                       <label className="text-xs text-white/40 mb-1.5 block">설명</label>
                       <textarea
                         value={proj.description}
-                        onChange={e => setProjects(prev => prev.map((p, j) => j === i ? { ...p, description: e.target.value } : p))}
+                        onChange={e => set('projects', resume.projects.map((p, j) => j === i ? { ...p, description: e.target.value } : p))}
                         placeholder="프로젝트 설명과 기여한 내용을 작성해주세요."
                         rows={3}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 resize-none"
@@ -297,8 +436,8 @@ export default function ResumePage() {
                   </div>
                 ))}
                 <button
-                  onClick={() => setProjects(prev => [...prev, { name: '', description: '', tech: '', link: '' }])}
-                  className="w-full py-2.5 border border-dashed border-white/15 rounded-lg text-xs text-white/30 hover:text-white/60 hover:border-white/30 transition-colors"
+                  onClick={() => set('projects', [...resume.projects, { name: '', description: '', tech: '', link: '' }])}
+                  className="w-full py-2.5 border border-dashed border-white/15 rounded-lg text-xs text-white/30 hover:border-white/30 hover:text-white/60 transition-colors"
                 >
                   + 프로젝트 추가
                 </button>
@@ -309,12 +448,12 @@ export default function ResumePage() {
             {activeSection === 4 && (
               <div className="flex flex-col gap-6">
                 <h3 className="text-sm font-medium">교육</h3>
-                {educations.map((edu, i) => (
+                {resume.educations.map((edu, i) => (
                   <div key={i} className="flex flex-col gap-3 pb-6 border-b border-white/8 last:border-0 last:pb-0">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-white/40">교육 {i + 1}</span>
-                      {educations.length > 1 && (
-                        <button onClick={() => setEducations(prev => prev.filter((_, j) => j !== i))} className="text-xs text-white/20 hover:text-red-400 transition-colors">삭제</button>
+                      {resume.educations.length > 1 && (
+                        <button onClick={() => set('educations', resume.educations.filter((_, j) => j !== i))} className="text-xs text-white/20 hover:text-red-400">삭제</button>
                       )}
                     </div>
                     {([
@@ -327,7 +466,7 @@ export default function ResumePage() {
                         <input
                           type="text"
                           value={edu[key]}
-                          onChange={e => setEducations(prev => prev.map((ed, j) => j === i ? { ...ed, [key]: e.target.value } : ed))}
+                          onChange={e => set('educations', resume.educations.map((ed, j) => j === i ? { ...ed, [key]: e.target.value } : ed))}
                           placeholder={placeholder}
                           className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
                         />
@@ -336,8 +475,8 @@ export default function ResumePage() {
                   </div>
                 ))}
                 <button
-                  onClick={() => setEducations(prev => [...prev, { school: '', major: '', period: '' }])}
-                  className="w-full py-2.5 border border-dashed border-white/15 rounded-lg text-xs text-white/30 hover:text-white/60 hover:border-white/30 transition-colors"
+                  onClick={() => set('educations', [...resume.educations, { school: '', major: '', period: '' }])}
+                  className="w-full py-2.5 border border-dashed border-white/15 rounded-lg text-xs text-white/30 hover:border-white/30 hover:text-white/60 transition-colors"
                 >
                   + 교육 추가
                 </button>
@@ -348,56 +487,54 @@ export default function ResumePage() {
 
         {/* 오른쪽: 미리보기 */}
         <div className="flex-1 min-w-0" id="resume-preview">
-          <div className="bg-white text-black rounded-xl p-10 shadow-2xl print:shadow-none print:rounded-none">
+          <div className="bg-white text-black rounded-xl p-10 shadow-xl">
             {/* 헤더 */}
-            <div className="border-b border-gray-200 pb-6 mb-6">
-              <div className="flex items-start justify-between">
+            <div className="border-b border-gray-100 pb-6 mb-6">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                    {profile.name || '이름'}
-                  </h1>
-                  <p className="text-sm text-gray-500 font-medium">{jobLabel}</p>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-0.5">{resume.name || '이름'}</h1>
+                  <p className="text-sm text-gray-400 font-medium">{jobLabel}</p>
                 </div>
-                <div className="text-right text-xs text-gray-400 space-y-1">
-                  {profile.email && <div>{profile.email}</div>}
-                  {profile.phone && <div>{profile.phone}</div>}
-                  {profile.github && <div>{profile.github}</div>}
-                  {profile.blog && <div>{profile.blog}</div>}
+                <div className="text-right text-xs text-gray-400 space-y-0.5 flex-shrink-0">
+                  {resume.email && <div>{resume.email}</div>}
+                  {resume.phone && <div>{resume.phone}</div>}
+                  {resume.github && <div className="text-blue-400">{resume.github}</div>}
+                  {resume.blog && <div className="text-blue-400">{resume.blog}</div>}
                 </div>
               </div>
-              {profile.intro && (
-                <p className="mt-4 text-sm text-gray-600 leading-relaxed">{profile.intro}</p>
+              {resume.intro && (
+                <p className="mt-4 text-sm text-gray-500 leading-relaxed">{resume.intro}</p>
               )}
             </div>
 
             {/* 스킬 */}
-            {skills.length > 0 && (
+            {resume.skills.length > 0 && (
               <div className="mb-6">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{sectionLabel2}</h2>
-                <div className="flex flex-wrap gap-2">
-                  {skills.map(s => (
-                    <span key={s} className="bg-gray-100 text-gray-700 text-xs px-3 py-1 rounded-full">{s}</span>
+                <h2 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Skills</h2>
+                <div className="flex flex-wrap gap-1.5">
+                  {resume.skills.map(s => (
+                    <span key={s} className="bg-gray-100 text-gray-600 text-xs px-2.5 py-1 rounded-md">{s}</span>
                   ))}
                 </div>
               </div>
             )}
 
             {/* 경력 */}
-            {careers.some(c => c.company) && (
+            {resume.careers.some(c => c.company) && (
               <div className="mb-6">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">경력</h2>
+                <h2 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Experience</h2>
                 <div className="space-y-4">
-                  {careers.filter(c => c.company).map((career, i) => (
+                  {resume.careers.filter(c => c.company).map((career, i) => (
                     <div key={i}>
-                      <div className="flex items-start justify-between mb-1">
+                      <div className="flex items-baseline justify-between mb-1">
                         <div>
                           <span className="text-sm font-semibold text-gray-900">{career.company}</span>
-                          {career.role && <span className="text-sm text-gray-500 ml-2">· {career.role}</span>}
+                          {career.role && <span className="text-xs text-gray-400 ml-2">{career.role}</span>}
                         </div>
-                        {career.period && <span className="text-xs text-gray-400">{career.period}</span>}
+                        {career.period && <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{career.period}</span>}
                       </div>
                       {career.description && (
-                        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{career.description}</p>
+                        <p className="text-xs text-gray-500 leading-relaxed whitespace-pre-line">{career.description}</p>
                       )}
                     </div>
                   ))}
@@ -406,22 +543,20 @@ export default function ResumePage() {
             )}
 
             {/* 프로젝트 */}
-            {projects.some(p => p.name) && (
+            {resume.projects.some(p => p.name) && (
               <div className="mb-6">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{sections[3]}</h2>
+                <h2 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Projects</h2>
                 <div className="space-y-4">
-                  {projects.filter(p => p.name).map((proj, i) => (
+                  {resume.projects.filter(p => p.name).map((proj, i) => (
                     <div key={i}>
-                      <div className="flex items-start justify-between mb-1">
+                      <div className="flex items-baseline justify-between mb-1">
                         <span className="text-sm font-semibold text-gray-900">{proj.name}</span>
-                        {proj.tech && <span className="text-xs text-gray-400">{proj.tech}</span>}
+                        {proj.tech && <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{proj.tech}</span>}
                       </div>
                       {proj.description && (
-                        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line mb-1">{proj.description}</p>
+                        <p className="text-xs text-gray-500 leading-relaxed whitespace-pre-line mb-1">{proj.description}</p>
                       )}
-                      {proj.link && (
-                        <p className="text-xs text-blue-500">{proj.link}</p>
-                      )}
+                      {proj.link && <p className="text-xs text-blue-400">{proj.link}</p>}
                     </div>
                   ))}
                 </div>
@@ -429,27 +564,26 @@ export default function ResumePage() {
             )}
 
             {/* 교육 */}
-            {educations.some(e => e.school) && (
+            {resume.educations.some(e => e.school) && (
               <div>
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">교육</h2>
+                <h2 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Education</h2>
                 <div className="space-y-2">
-                  {educations.filter(e => e.school).map((edu, i) => (
-                    <div key={i} className="flex items-start justify-between">
+                  {resume.educations.filter(e => e.school).map((edu, i) => (
+                    <div key={i} className="flex items-baseline justify-between">
                       <div>
                         <span className="text-sm font-semibold text-gray-900">{edu.school}</span>
-                        {edu.major && <span className="text-sm text-gray-500 ml-2">· {edu.major}</span>}
+                        {edu.major && <span className="text-xs text-gray-400 ml-2">{edu.major}</span>}
                       </div>
-                      {edu.period && <span className="text-xs text-gray-400">{edu.period}</span>}
+                      {edu.period && <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{edu.period}</span>}
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* 빈 상태 */}
-            {!profile.name && skills.length === 0 && !careers[0].company && !projects[0].name && (
-              <div className="text-center text-gray-300 py-12 text-sm">
-                왼쪽 폼에 내용을 입력하면 여기에 미리보기가 표시됩니다.
+            {!resume.name && resume.skills.length === 0 && !resume.careers[0]?.company && (
+              <div className="text-center text-gray-200 py-12 text-sm">
+                왼쪽 폼에 내용을 입력하면 미리보기가 표시됩니다.
               </div>
             )}
           </div>
@@ -458,8 +592,8 @@ export default function ResumePage() {
 
       <style>{`
         @media print {
-          body > * { display: none; }
-          #resume-preview { display: block !important; position: fixed; top: 0; left: 0; width: 100%; }
+          body > * { display: none !important; }
+          #resume-preview { display: block !important; position: fixed; inset: 0; padding: 40px; background: white; }
         }
       `}</style>
     </div>
