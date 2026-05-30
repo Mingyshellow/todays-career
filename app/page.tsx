@@ -5,29 +5,35 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase'
 
 export default function Home() {
-  const [visible, setVisible] = useState(false)
+  const [opacity, setOpacity] = useState(0)
   const router = useRouter()
 
   useEffect(() => {
-    setTimeout(() => setVisible(true), 100)
+    // 바로 페이드인 시작
+    setTimeout(() => setOpacity(1), 200)
+
     const check = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
+      // 3초 후 이동
       setTimeout(() => {
         if (user) router.push('/dashboard')
         else router.push('/auth')
-      }, 2000)
+      }, 3000)
     }
     check()
   }, [])
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-black">
       <h1
-        className="text-3xl font-bold tracking-widest transition-all duration-1000"
         style={{
-          opacity: visible ? 1 : 0,
-          color: visible ? 'white' : 'rgba(255,255,255,0.1)',
+          opacity,
+          transition: 'opacity 1.5s ease',
+          color: 'white',
+          fontSize: '2rem',
+          fontWeight: 'bold',
+          letterSpacing: '0.2em',
         }}
       >
         오늘의 커리어
