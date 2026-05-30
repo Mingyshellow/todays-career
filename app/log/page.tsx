@@ -65,9 +65,8 @@ export default function LogPage() {
 
   const loadDate = (dateStr: string) => {
     const existing = logs.find(l => l.log_date === dateStr)
-    if (existing) {
-      loadLog(existing)
-    } else {
+    if (existing) loadLog(existing)
+    else {
       setEditingLog(null)
       setActiveDate(dateStr)
       setContent('')
@@ -158,12 +157,11 @@ export default function LogPage() {
           <div className="bg-white/5 border border-white/10 rounded-xl p-6 sticky top-20">
 
             {/* 날짜 네비게이션 */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-2">
               <button
                 onClick={prevDate}
                 className="w-7 h-7 flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-all text-lg"
               >‹</button>
-
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
                   {formatDate(activeDate)}
@@ -176,7 +174,6 @@ export default function LogPage() {
                   <span className="text-xs bg-white/5 text-white/30 px-2 py-0.5 rounded-full">수정</span>
                 )}
               </div>
-
               <button
                 onClick={nextDate}
                 disabled={isToday}
@@ -196,13 +193,13 @@ export default function LogPage() {
               </button>
             )}
 
-            {/* 오늘 한 일 */}
-            <div className="mb-4">
+            {/* 한 일 */}
+            <div className="mb-4 mt-4">
               <label className="text-xs text-white/40 mb-2 block">한 일</label>
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value)}
-                placeholder={isToday ? "오늘 어떤 일을 했나요?" : `${formatDate(activeDate)}에 한 일을 기록해보세요.`}
+                placeholder={isToday ? '오늘 어떤 일을 했나요?' : `${formatDate(activeDate)}에 한 일을 기록해보세요.`}
                 rows={5}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors resize-none"
               />
@@ -281,51 +278,68 @@ export default function LogPage() {
           ) : (
             <div className="relative">
               <div className="absolute left-[7px] top-2 bottom-2 w-px bg-white/8" />
-              <div className="flex flex-col gap-6">
-                {logs.map(log => (
-                  <div
-                    key={log.id}
-                    className="flex gap-4 relative cursor-pointer group"
-                    onClick={() => loadLog(log)}
-                  >
-                    <div className={`w-3.5 h-3.5 rounded-full border-2 mt-1 flex-shrink-0 z-10 transition-all ${
-                      activeDate === log.log_date
-                        ? 'bg-white border-white scale-110'
-                        : log.log_date === todayStr
-                        ? 'bg-white border-white'
-                        : 'bg-[#0a0a0a] border-white/25 group-hover:border-white/60'
-                    }`} />
-                    <div className={`flex-1 pb-2 transition-all ${
-                      activeDate === log.log_date ? 'opacity-100' : 'opacity-50 group-hover:opacity-90'
-                    }`}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs text-white/60">{formatDate(log.log_date)}</span>
-                        <span className="text-xs text-white/30">{getDayLabel(log.log_date)}</span>
-                        {log.log_date === todayStr && (
-                          <span className="text-xs bg-white/10 text-white/50 px-1.5 py-0.5 rounded-full">오늘</span>
-                        )}
-                        <span className="text-xs text-white/20 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                          수정하기 →
-                        </span>
-                      </div>
-                      {log.summary && (
-                        <p className="text-sm font-medium text-white mb-1.5">{log.summary}</p>
-                      )}
-                      <p className="text-sm text-white/75 leading-relaxed mb-2 whitespace-pre-wrap line-clamp-3">
-                        {log.content}
-                      </p>
-                      {log.tags?.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {log.tags.map(tag => (
-                            <span key={tag} className="text-xs bg-white/8 text-white/40 px-2 py-0.5 rounded-full">
-                              {tag}
-                            </span>
-                          ))}
+              <div className="flex flex-col gap-0">
+                {logs.map((log, index) => {
+                  const currentMonth = log.log_date.slice(0, 7)
+                  const prevMonth = index > 0 ? logs[index - 1].log_date.slice(0, 7) : null
+                  const showMonthHeader = currentMonth !== prevMonth
+
+                  return (
+                    <div key={log.id}>
+                      {showMonthHeader && (
+                        <div className="flex items-center gap-3 mb-4 mt-2 pl-6">
+                          <span className="text-xs font-semibold text-white/25 tracking-widest">
+                            {currentMonth.replace('-', '.')}
+                          </span>
+                          <div className="flex-1 h-px bg-white/8" />
                         </div>
                       )}
+                      <div
+                        className="flex gap-4 relative cursor-pointer group mb-6"
+                        onClick={() => loadLog(log)}
+                      >
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 mt-1 flex-shrink-0 z-10 transition-all ${
+                          activeDate === log.log_date
+                            ? 'bg-white border-white scale-110'
+                            : log.log_date === todayStr
+                            ? 'bg-white border-white'
+                            : 'bg-[#0a0a0a] border-white/25 group-hover:border-white/60'
+                        }`} />
+                        <div className={`flex-1 pb-2 transition-all ${
+                          activeDate === log.log_date ? 'opacity-100' : 'opacity-50 group-hover:opacity-90'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="text-xs font-medium text-white/70">
+                              {String(new Date(log.log_date).getDate()).padStart(2, '0')}일
+                            </span>
+                            <span className="text-xs text-white/30">{getDayLabel(log.log_date)}</span>
+                            {log.log_date === todayStr && (
+                              <span className="text-xs bg-white/10 text-white/50 px-1.5 py-0.5 rounded-full">오늘</span>
+                            )}
+                            <span className="text-xs text-white/20 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+                              수정하기 →
+                            </span>
+                          </div>
+                          {log.summary && (
+                            <p className="text-sm font-medium text-white mb-1.5">{log.summary}</p>
+                          )}
+                          <p className="text-sm text-white/75 leading-relaxed mb-2 whitespace-pre-wrap line-clamp-3">
+                            {log.content}
+                          </p>
+                          {log.tags?.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {log.tags.map(tag => (
+                                <span key={tag} className="text-xs bg-white/8 text-white/40 px-2 py-0.5 rounded-full">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
