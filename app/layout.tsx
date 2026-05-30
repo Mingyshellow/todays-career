@@ -14,27 +14,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body>
-        <header className="fixed top-0 left-0 right-0 h-14 border-b border-white/10 flex items-center px-6 z-50">
-          <Link href="/" className="text-sm font-bold tracking-widest mr-10">
+      <body style={{ backgroundColor: '#0a0a0a', color: '#ededed', margin: 0 }}>
+        <header style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '56px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', padding: '0 24px', zIndex: 50, backgroundColor: '#0a0a0a' }}>
+          <Link href="/" style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '0.1em', marginRight: '40px', color: 'white', textDecoration: 'none' }}>
             오늘의 커리어
           </Link>
-          <nav className="flex gap-6">
-            <Link href="/dashboard" className="text-sm text-white/60 hover:text-white transition-colors">
-              대시보드
-            </Link>
-            <Link href="/log" className="text-sm text-white/60 hover:text-white transition-colors">
-              일지 기록
-            </Link>
-            <Link href="/report" className="text-sm text-white/60 hover:text-white transition-colors">
-              주간 리포트
-            </Link>
-            <Link href="/resume" className="text-sm text-white/60 hover:text-white transition-colors">
-              이력서
-            </Link>
+          <nav style={{ display: 'flex', gap: '24px' }}>
+            <Link href="/dashboard" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>대시보드</Link>
+            <Link href="/log" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>일지 기록</Link>
+            <Link href="/report" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>주간 리포트</Link>
+            <Link href="/resume" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>이력서</Link>
           </nav>
         </header>
-        <main className="pt-14">
+        <main style={{ paddingTop: '56px' }}>
           {children}
         </main>
       </body>
