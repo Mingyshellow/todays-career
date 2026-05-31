@@ -28,6 +28,15 @@ export default function Auth() {
     setLoading(false)
   }
 
+  const handleKakaoLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
+    })
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
@@ -37,6 +46,26 @@ export default function Auth() {
         </p>
 
         <div className="flex flex-col gap-4">
+          {/* 카카오 로그인 버튼 */}
+          <button
+            onClick={handleKakaoLogin}
+            className="w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-95"
+            style={{ backgroundColor: '#FEE500', color: '#000000' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path fillRule="evenodd" clipRule="evenodd" d="M9 1.5C4.858 1.5 1.5 4.134 1.5 7.374c0 2.088 1.392 3.924 3.492 4.968l-.888 3.312a.188.188 0 00.288.204L8.244 13.5c.246.018.498.024.756.024 4.142 0 7.5-2.634 7.5-5.874C16.5 4.134 13.142 1.5 9 1.5z" fill="#000000"/>
+            </svg>
+            카카오로 {isLogin ? '로그인' : '회원가입'}
+          </button>
+
+          {/* 구분선 */}
+          <div className="flex items-center gap-3 my-1">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-white/20">또는</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* 이메일 입력 */}
           <div>
             <label className="text-xs text-white/40 mb-1 block">이메일</label>
             <input
