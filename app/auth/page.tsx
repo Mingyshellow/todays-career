@@ -29,13 +29,15 @@ export default function Auth() {
   }
 
   const handleKakaoLogin = async () => {
-    await supabase.auth.signInWithOAuth({
+    console.log('카카오 로그인 시작')
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-        scopes: 'profile_nickname profile_image',
+        redirectTo: 'https://todays-career.vercel.app/dashboard',
+        scopes: 'profile_nickname profile_image account_email',
       },
     })
+    console.log('결과:', data, error)
   }
 
   return (
@@ -47,7 +49,6 @@ export default function Auth() {
         </p>
 
         <div className="flex flex-col gap-4">
-          {/* 카카오 로그인 버튼 */}
           <button
             onClick={handleKakaoLogin}
             className="w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-95"
@@ -59,14 +60,12 @@ export default function Auth() {
             카카오로 {isLogin ? '로그인' : '회원가입'}
           </button>
 
-          {/* 구분선 */}
           <div className="flex items-center gap-3 my-1">
             <div className="flex-1 h-px bg-white/10" />
             <span className="text-xs text-white/20">또는</span>
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          {/* 이메일 입력 */}
           <div>
             <label className="text-xs text-white/40 mb-1 block">이메일</label>
             <input
