@@ -22,6 +22,7 @@ export default function LogPage() {
   const [customTag, setCustomTag] = useState('')
   const [allTags, setAllTags] = useState(DEFAULT_TAGS)
   const [saving, setSaving] = useState(false)
+  const [summarizing, setSummarizing] = useState(false)
   const [editingLog, setEditingLog] = useState<Log | null>(null)
   const [activeDate, setActiveDate] = useState<string>('')
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
@@ -112,22 +113,39 @@ export default function LogPage() {
   const handleSave = async () => {
     if (!content.trim() || !userId) return
     setSaving(true)
+
+    // Gemini 요약 생성
+    setSummarizing(true)
+    let summary = editingLog?.summary || ''
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      })
+      const data = await res.json()
+      summary = data.summary || summary
+    } catch (e) {
+      console.error('요약 생성 실패:', e)
+    }
+    setSummarizing(false)
+
     const supabase = createClient()
     if (editingLog) {
       const { error } = await supabase
         .from('logs')
-        .update({ content, tags: selectedTags })
+        .update({ content, tags: selectedTags, summary })
         .eq('id', editingLog.id)
       if (!error) {
         setLogs(prev => prev.map(l =>
-          l.id === editingLog.id ? { ...l, content, tags: selectedTags } : l
+          l.id === editingLog.id ? { ...l, content, tags: selectedTags, summary } : l
         ))
-        setEditingLog(prev => prev ? { ...prev, content, tags: selectedTags } : null)
+        setEditingLog(prev => prev ? { ...prev, content, tags: selectedTags, summary } : null)
       }
     } else {
       const { data, error } = await supabase
         .from('logs')
-        .insert({ user_id: userId, log_date: activeDate, content, tags: selectedTags })
+        .insert({ user_id: userId, log_date: activeDate, content, tags: selectedTags, summary })
         .select()
         .single()
       if (!error && data) {
@@ -212,14 +230,20 @@ export default function LogPage() {
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs text-white/40">하루 요약</label>
-                <span className="text-xs text-white/20 bg-white/5 px-2 py-0.5 rounded-full">Gemini 연동 예정</span>
+                <span className="text-xs text-white/20 bg-white/5 px-2 py-0.5 rounded-full">Gemini</span>
               </div>
-              <div className="w-full bg-white/3 border border-dashed border-white/8 rounded-lg px-4 py-3 text-xs text-white/20 text-center">
-                기록을 저장하면 AI가 자동으로 요약해드려요
+              <div className="w-full bg-white/3 border border-dashed border-white/8 rounded-lg px-4 py-3 text-xs min-h-[44px] flex items-center">
+                {summarizing ? (
+                  <span className="text-white/30 animate-pulse">AI가 요약 중...</span>
+                ) : editingLog?.summary ? (
+                  <span className="text-white/60">{editingLog.summary}</span>
+                ) : (
+                  <span className="text-white/20 text-center w-full">기록을 저장하면 AI가 자동으로 요약해드려요</span>
+                )}
               </div>
             </div>
 
-            {/* 태그 - 노션 스타일 드롭다운 */}
+            {/* 태그 */}
             <div className="mb-6" ref={dropdownRef}>
               <label className="text-xs text-white/40 mb-2 block">태그</label>
               <div
@@ -288,7 +312,7 @@ export default function LogPage() {
               disabled={!content.trim() || saving}
               className="w-full py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-30"
             >
-              {saving ? '저장 중...' : hasLog ? '수정 완료' : '기록 저장'}
+              {saving ? (summarizing ? 'AI 요약 중...' : '저장 중...') : hasLog ? '수정 완료' : '기록 저장'}
             </button>
           </div>
         </div>
