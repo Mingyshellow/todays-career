@@ -32,10 +32,11 @@ export default function Auth() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
-        redirectTo: 'https://todays-career.vercel.app/dashboard',
+        redirectTo: 'https://todays-career.vercel.app/auth/callback', // ← 수정
         scopes: 'profile_nickname profile_image account_email',
       },
     })
+    if (error) console.error('카카오 로그인 오류:', error)
     if (data?.url) {
       window.location.href = data.url
     }
