@@ -33,6 +33,7 @@ export default function Auth() {
       provider: 'kakao',
       options: {
         redirectTo: `${window.location.origin}/dashboard`,
+        scopes: 'profile_nickname profile_image',
       },
     })
   }
