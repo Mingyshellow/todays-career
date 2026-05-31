@@ -43,7 +43,7 @@ export default function Dashboard() {
     const supabase = createClient()
     const { error } = await supabase
       .from('logs')
-      .insert({ user_id: userId, log_date: todayStr, did: '출석체크' })
+      .insert({ user_id: userId, log_date: todayStr, content: '출석체크' })
     if (!error) {
       setLogs(prev => [...prev, { log_date: todayStr }])
       setJustChecked(true)
@@ -77,7 +77,6 @@ export default function Dashboard() {
     return weekDates.filter(d => loggedDates.includes(d)).length
   }
 
-  // 달력
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
   const firstDay = new Date(year, month, 1).getDay()
@@ -105,7 +104,6 @@ export default function Dashboard() {
       {/* 섹션 1: 풀스크린 히어로 */}
       <section className="h-screen flex flex-col items-center justify-center relative bg-[#0a0a0a]">
 
-        {/* 엔터 애니메이션 텍스트 */}
         <div className={`text-center transition-all duration-1000 ${entered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <p className="text-xs tracking-[0.3em] text-white/30 uppercase mb-6">
             {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
@@ -117,7 +115,6 @@ export default function Dashboard() {
             커리어
           </h1>
 
-          {/* 출석체크 버튼 */}
           <div className={`transition-all duration-1000 delay-300 ${entered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             {loading ? (
               <div className="w-48 h-12 bg-white/5 rounded-lg animate-pulse mx-auto" />
@@ -136,7 +133,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* 스탯 */}
           {!loading && (
             <div className={`flex gap-8 mt-12 justify-center transition-all duration-1000 delay-500 ${entered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
               {[
@@ -153,7 +149,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* SCROLL DOWN */}
         <button
           onClick={scrollToSection2}
           className={`absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/20 hover:text-white/50 transition-all duration-1000 delay-700 ${entered ? 'opacity-100' : 'opacity-0'}`}
@@ -191,14 +186,12 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 요일 */}
           <div className="grid grid-cols-7 mb-3">
             {['월', '화', '수', '목', '금', '토', '일'].map(d => (
               <div key={d} className="text-center text-xs text-white/20 py-2">{d}</div>
             ))}
           </div>
 
-          {/* 날짜 */}
           <div className="grid grid-cols-7 gap-2">
             {calendarDays.map((day, i) => {
               if (!day) return <div key={`e-${i}`} className="aspect-square" />
@@ -229,7 +222,6 @@ export default function Dashboard() {
             })}
           </div>
 
-          {/* 출석 요약 */}
           <div className="mt-10 flex items-center justify-between text-sm text-white/30">
             <span>{month + 1}월 {loggedDates.filter(d => d.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)).length}일 기록</span>
             <span>연속 {getStreak()}일 🔥</span>
@@ -247,7 +239,6 @@ export default function Dashboard() {
             <p className="text-white/15 text-xs">Gemini 연동 후 기록을 분석해드려요.</p>
           </div>
 
-          {/* 성장 추천 */}
           <div className="mt-6 bg-white/5 border border-white/10 rounded-xl p-8 text-center">
             <p className="text-white/20 text-sm mb-2">성장 추천</p>
             <p className="text-white/15 text-xs">기록이 쌓이면 맞춤 추천이 나타나요.</p>
