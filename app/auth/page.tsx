@@ -29,7 +29,6 @@ export default function Auth() {
   }
 
   const handleKakaoLogin = async () => {
-    console.log('카카오 로그인 시작')
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
@@ -37,7 +36,9 @@ export default function Auth() {
         scopes: 'profile_nickname profile_image account_email',
       },
     })
-    console.log('결과:', data, error)
+    if (data?.url) {
+      window.location.href = data.url
+    }
   }
 
   return (
